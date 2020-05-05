@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+# http://blog.pkh.me/p/21-high-quality-gif-with-ffmpeg.html#usage
+
+r"""
+video2gif: Convert a video file into a GIF.
+
+The GIF should be (reasonably) compressed and high-quality.
+
+Usage:
+    $ video2gif foo.mp4
+    $ video2gif foo.mp4 foo.gif --scale 640
+"""
+
+__version__ = '0.1.0'
+
+
+import re
+import tempfile
+import sys
+import os.path
+import subprocess as sp
+import shlex
+
+
+def run(cmd: str):
+    sys.stderr.write(cmd)
+    sys.stderr.write('\n')
+    sys.stderr.flush()
+    return sp.call(cmd, shell=True)
+
+
+def convert(inputfile, outputfile=None, *, fps=24, scale=None):
+    if not os.path.exists(inputfile):
+        sys.stderr.write('File does not exist: ' + inputfile + '\n')
+        return 1
+    if not outputfile:
+        outputfile = os.path.splitext(inputfile)[0] + ".gif"
+
+    fd, tmpfile = tempfile.mkstemp(suffix=".png", prefix="video2gif-palette")
+    os.close(fd)
+
+    try:
+        palette = tmpfile
+        filters = f"fps={fps}"
+        if scale:
+            # e.g. 50% -> iw:50, ih:50
+            match = re.search(r'^(\d+\.?\d*)%$', scale)
+            if match:
+                percent = float(match.group(1)) / 100.0
+                scale = 'iw*{percent:.2f}:ih*{percent:.2f}'.format(percent=percent)
+
+            filters += ",scale={scale}:-1:flags=lanczos".format(scale=scale)
+
+        ctx = dict(
+            inputfile=shlex.quote(inputfile),
+            outputfile=shlex.quote(outputfile),
+            filters=filters, palette=palette
+        )
+
+        cmd = "ffmpeg -v warning -i {inputfile} -vf \"{filters},palettegen\" -y {palette}".format(**ctx)
+        if run(cmd) != 0:
+            return 1
+        cmd = "ffmpeg -v warning -i {inputfile} -i {palette} -lavfi \"{filters} [x]; [x][1:v] paletteuse\" -y {outputfile}".format(**ctx)
+        if run(cmd) != 0:
+            return 1
+
+    finally:
+        try:
+            os.remove(tmpfile)
+        except OSError:
+            pass
+
+    return 0
+
+
+def main(argv):
+    import argparse
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-v', '--version', action='version',
+                        version='video2gif %s' % __version__)
+    parser.add_argument('inputfile', default=None, type=str, nargs='?')
+    parser.add_argument('outputfile', default=None, type=str, nargs='?')
+    parser.add_argument('--scale', default=None, type=str,
+                        help='Output scale. e.g. 640, 640:360, -1:480, iw*2:ih, 50%%')
+    parser.add_argument('--fps', default=24, type=int,
+                        help='FPS (defaults 24)')
+
+    args = parser.parse_args(argv)
+    if not args.inputfile:
+        parser.print_help()
+        return 0
+    return convert(**vars(args))
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
