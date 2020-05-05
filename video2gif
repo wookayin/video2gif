@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# https://github.com/wookayin/video2gif
 # http://blog.pkh.me/p/21-high-quality-gif-with-ffmpeg.html#usage
 
 r"""

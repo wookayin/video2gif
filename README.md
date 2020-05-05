@@ -6,6 +6,13 @@ Convert a video file (mp4, mov, etc.) to a reasonable GIF.
 Usage
 -----
 
+Download:
+```
+mkdir -p "$HOME/.local/bin"        # or anywhere else in your $PATH
+curl -L "https://raw.githubusercontent.com/wookayin/video2gif/master/video2gif" > "$HOME/.local/bin/video2gif" \
+  && chmod +x "$HOME/.local/bin/video2gif"
+```
+
 Requires ffmpeg.
 
 ```bash
