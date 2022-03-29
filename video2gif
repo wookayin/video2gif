@@ -12,15 +12,18 @@ Usage:
     $ video2gif foo.mp4 foo.gif --scale 640
 """
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 
+import atexit
 import re
 import tempfile
 import sys
+import os
 import os.path
 import subprocess as sp
 import shlex
+import urllib.request
 
 
 def run(cmd: str):
@@ -30,10 +33,31 @@ def run(cmd: str):
     return sp.call(cmd, shell=True)
 
 
+def download_to_tempfile(url):
+    tmpdir = tempfile.TemporaryDirectory(prefix="video2gif")
+    tmpfile = os.path.join(tmpdir.name, os.path.basename(url))
+    sys.stderr.write(f"Downloading to: {tmpfile}\n")
+    urllib.request.urlretrieve(url, filename=tmpfile)
+
+    def delete_on_exit():
+        try:
+            sys.stderr.write(f"Removing temporary dir: {tmpdir.name}\n")
+            os.unlink(tmpfile)
+            os.removedirs(tmpdir.name)
+        except IOError:
+            pass
+    atexit.register(delete_on_exit)
+    return tmpfile
+
+
 def convert(inputfile, outputfile=None, *, fps=24, scale=None):
-    if not os.path.exists(inputfile):
+    if inputfile.startswith('https://') or inputfile.startswith('http://'):
+        inputfile = download_to_tempfile(inputfile)
+        outputfile = os.path.splitext(os.path.basename(inputfile))[0] + ".gif"
+    elif not os.path.exists(inputfile):
         sys.stderr.write('File does not exist: ' + inputfile + '\n')
         return 1
+
     if not outputfile:
         outputfile = os.path.splitext(inputfile)[0] + ".gif"
 
@@ -71,6 +95,8 @@ def convert(inputfile, outputfile=None, *, fps=24, scale=None):
         except OSError:
             pass
 
+    file_size = os.stat(outputfile).st_size
+    sys.stderr.write(f"Output written to: {outputfile} ({file_size:,} bytes)\n")
     return 0
 
 
